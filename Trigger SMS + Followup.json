@@ -1,0 +1,495 @@
+{
+  "name": "(Prime Dentistry) Trigger SMS + Followup",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "de689fcd-f8b7-45ab-ab4a-249450cc31ad",
+              "leftValue": "={{ $json.userReplied }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "d87c6e75-16ec-4296-a9db-0d800ea62c51",
+              "leftValue": "={{ $json.messageCount }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        32,
+        -160
+      ],
+      "id": "c51cfae9-b6b8-4ce2-827e-e25310ce817b",
+      "name": "User Did Not Reply?1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -64
+      ],
+      "id": "e88f3d09-0e5d-4e6f-834f-132db09e62b2",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the input data\nconst messages = $input.first().json.messages.messages;\n\n// Get the initial message ID from the Send Initial SMS node output\nconst sendSmsOutput = $('Send initial SMS').first().json;\nconst initialMessageId = sendSmsOutput.messageId;\n\n// FIRST: Sort all messages by dateAdded (oldest to newest)\nconst sortedMessages = [...messages].sort((a, b) => \n  new Date(a.dateAdded) - new Date(b.dateAdded)\n);\n\n// THEN: Find the index of the initial message in the sorted array\nconst initialMessageIndex = sortedMessages.findIndex(msg => msg.id === initialMessageId);\n\n// If initial message not found, return early\nif (initialMessageIndex === -1) {\n  return {\n    userReplied: false,\n    messageCount: 0,\n    nextMessage: \"\",\n    debug: {\n      initialMessageId: initialMessageId,\n      totalMessages: sortedMessages.length,\n      error: \"Initial message not found in conversation\"\n    }\n  };\n}\n\n// Get only messages that came AFTER the initial message (from the sorted array)\nconst messagesAfterInitial = sortedMessages.slice(initialMessageIndex + 1);\n\n// Filter only TYPE_SMS messages from messages after initial\nconst smsMessages = messagesAfterInitial.filter(message => message.messageType === 'TYPE_SMS');\n\n// Check if there are any inbound messages from the user\nconst userReplied = smsMessages.some(message => message.direction === 'inbound');\n\n// Get the total count of outbound SMS messages after the initial message\nconst outboundSmsCount = smsMessages.filter(message => message.direction === 'outbound').length;\n\nlet nextMessage = \"\";\n\nif (outboundSmsCount === 0) {\n  nextMessage = $('GHL SMS Webhook').first().json.body.customData.followup_1;\n}\n\nif (outboundSmsCount === 1) {\n  nextMessage = $('GHL SMS Webhook').first().json.body.customData.followup_2;\n}\n\n// Return the result as an object\nreturn {\n  userReplied,\n  messageCount: outboundSmsCount,\n  nextMessage\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -160
+      ],
+      "id": "fb9f6ab2-78ff-480f-931e-ad6139465d86",
+      "name": "Check Reply Status"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get current time in US/Eastern timezone\nconst now = new Date();\n\n// Get Eastern time components\nconst easternTime = new Date(now.toLocaleString(\"en-US\", { timeZone: \"America/New_York\" }));\nconst easternHour = easternTime.getHours();\nconst easternMinute = easternTime.getMinutes();\n\n// Working hours: 8 AM to 8 PM\nconst workingStart = 8;\nconst workingEnd = 20;\n\n// Calculate remaining hours until next working time\nlet remainingHours = 0;\n\nif (easternHour < workingStart) {\n  // Before 8 AM - wait until 8 AM today\n  remainingHours = (workingStart - easternHour) - (easternMinute / 60);\n} else if (easternHour >= workingEnd) {\n  // After 8 PM - wait until 8 AM tomorrow\n  remainingHours = (24 - easternHour + workingStart) - (easternMinute / 60);\n}\n\n// Round to 2 decimal places\nremainingHours = Math.round(remainingHours * 100) / 100;\n\nreturn [{\n  remainingHours: remainingHours,\n  currentTime: easternTime.toLocaleString(\"en-US\", { timeZone: \"America/New_York\" })\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -256
+      ],
+      "id": "cce670f7-cf3c-4f0e-bf84-71bd498858fd",
+      "name": "RemainingHours"
+    },
+    {
+      "parameters": {
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        -96
+      ],
+      "id": "64a2f982-0002-4cf9-b104-bb81692536d4",
+      "name": "Wait 5 Hours",
+      "webhookId": "5b4bf56f-cd95-4b4a-81fb-4d3fb2cda795"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.remainingHours }}",
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        -256
+      ],
+      "id": "4e0d486e-3aa8-4eee-8998-3750680a5b14",
+      "name": "Wait for working hours",
+      "webhookId": "c32e48ba-2caf-4b44-af9d-318936ff8de2"
+    },
+    {
+      "parameters": {
+        "content": "### Things to change\n- Auth header\n",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -912,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "00b2343e-ff69-46ea-b5b3-719d40b26f72",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f46323ba-640a-48df-a596-44e8640efbc3",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        -96
+      ],
+      "id": "0fd3ee29-9120-4298-b4d5-bdf8f439404d",
+      "name": "GHL SMS Webhook",
+      "webhookId": "f46323ba-640a-48df-a596-44e8640efbc3"
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/{{ $json.conversationId }}/messages ",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-04-15"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -416,
+        -160
+      ],
+      "id": "7424d02e-c5de-4e48-be11-376b8c3d12f9",
+      "name": "Get messages",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fPa5vkp5XsOeh1Fl",
+          "name": "Prime Dentistry"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### Things to change\n- Auth header",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -464,
+        -272
+      ],
+      "typeVersion": 1,
+      "id": "2094fdf7-5a38-4220-a135-51ef65b06a6f",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "### Things to change\n- timezone",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        208,
+        -368
+      ],
+      "typeVersion": 1,
+      "id": "d70f717f-ec32-450b-a635-62f632e8eb61",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "### Things to change\n- Auth header\n",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        656,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "d13fb3b5-5c0f-41d2-b62d-cba562f6b2bd",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/conversations/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-04-15"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"SMS\",\n  \"contactId\": \"{{ $('GHL SMS Webhook').item.json.body.customData.contact_id }}\",\n  \"message\": \"{{ $('Check Reply Status').item.json.nextMessage }}\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        -96
+      ],
+      "id": "699dabb2-4fbd-48f6-ac10-0b88d441493f",
+      "name": "Send followup SMS",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fPa5vkp5XsOeh1Fl",
+          "name": "Prime Dentistry"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/conversations/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-04-15"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"SMS\",\n  \"contactId\": \"{{ $json.body.customData.contact_id }}\",\n  \"message\": \"{{ $json.body.customData.initial_message }}\"\n  \n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -864,
+        -96
+      ],
+      "id": "bcd82fe9-5fa8-4de4-a9a2-96c5b9bc0693",
+      "name": "Send initial SMS",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fPa5vkp5XsOeh1Fl",
+          "name": "Prime Dentistry"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "GHL SMS Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "aspiredental.app.n8n.cloud",
+            "user-agent": "axios/1.7.7",
+            "content-length": "1321",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "34.55.130.245",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "9917dfb9c0fee25f-ORD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "traceparent": "00-8370d4277d4297d059c0fd4f8257754d-d4ed75de2c67a125-00",
+            "x-forwarded-for": "34.55.130.245, 172.70.100.15",
+            "x-forwarded-host": "aspiredental.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-61-6d55649f6f-tt4xc",
+            "x-is-trusted": "yes",
+            "x-real-ip": "34.55.130.245"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "contact_id": "5G1qs5mR8XHjCwhHiXEN",
+            "first_name": "Eric Test",
+            "full_name": "Eric Test",
+            "phone": "+16042005722",
+            "tags": "",
+            "country": "US",
+            "date_created": "2025-10-20T10:35:49.550Z",
+            "full_address": "",
+            "contact_type": "lead",
+            "opportunity_name": "Eric Test",
+            "status": "open",
+            "pipleline_stage": "Voicemail",
+            "pipeline_id": "hSfvUbmq4u5lGr0iaoAZ",
+            "id": "ZCXTTFklSTnv1DFbykq1",
+            "pipeline_name": "Implant Pipeline",
+            "location": {
+              "name": "Smilistic Dental Care of Braintree",
+              "address": "250 Granite St suite 1060",
+              "city": "Braintree",
+              "state": "MA",
+              "country": "US",
+              "postalCode": "02184",
+              "fullAddress": "250 Granite St suite 1060, Braintree MA 02184",
+              "id": "PrjWuYhV3Pde8bLCLamS"
+            },
+            "workflow": {
+              "id": "12ffa2a7-d314-4811-b15f-8414aec6fe69",
+              "name": "Voicemail"
+            },
+            "triggerData": {},
+            "contact": {
+              "attributionSource": {
+                "sessionSource": "CRM UI",
+                "medium": "manual",
+                "mediumId": null
+              },
+              "lastAttributionSource": {}
+            },
+            "attributionSource": {},
+            "customData": {
+              "first_name": "Eric Test",
+              "last_name": "",
+              "agent_id": "agent_8b729fda408001cfd416a1c078",
+              "contact_id": "5G1qs5mR8XHjCwhHiXEN",
+              "initial_message": "Hi Eric Test, we gave you a call and left a voicemail. Please reply or call us back to schedule your consultation",
+              "followup_1": "Following up to see when you’d like to schedule your consultation.",
+              "followup_2": "Still interested in setting up your consultation? No worries if not."
+            }
+          },
+          "webhookUrl": "https://aspiredental.app.n8n.cloud/webhook/88b1d61c-cc26-4a2c-a39c-a9f82f8ce676",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "User Did Not Reply?1": {
+      "main": [
+        [
+          {
+            "node": "RemainingHours",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reply Status": {
+      "main": [
+        [
+          {
+            "node": "User Did Not Reply?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RemainingHours": {
+      "main": [
+        [
+          {
+            "node": "Wait for working hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Hours": {
+      "main": [
+        [
+          {
+            "node": "Get messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for working hours": {
+      "main": [
+        [
+          {
+            "node": "Send followup SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL SMS Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send initial SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get messages": {
+      "main": [
+        [
+          {
+            "node": "Check Reply Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send followup SMS": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send initial SMS": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "db499217-8cda-4137-be79-50683a299cdc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "384fba40593c03ccff966720aff7f4660b5f954ede01089c5da17027a948a27f"
+  },
+  "id": "7YA1mAm42Ql71fOW",
+  "tags": []
+}

@@ -1,0 +1,106 @@
+{
+  "name": "(Prime Dentistry) Trigger the call",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "75afca34-8bb2-4365-bd65-088ce77f07fb",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        0
+      ],
+      "id": "77f80586-b9a5-498a-8aa0-a0298d9a13b6",
+      "name": "Webhook",
+      "webhookId": "75afca34-8bb2-4365-bd65-088ce77f07fb"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.retellai.com/v2/create-phone-call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer key_35d84f947cda3980b41ad17f1dd2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from_number\": \"{{ $('Webhook').item.json.body.customData.from_number }}\",\n  \"to_number\": \"{{ $json.formattedPhone }}\",\n  \"override_agent_id\": \"{{ $('Webhook').item.json.body.customData.agent_id }}\",\n  \"retell_llm_dynamic_variables\": {\n    \"first_name\": \"{{ $('Webhook').item.json.body.customData.first_name }}\",\n    \"now_time\": \"{{ $('Webhook').item.json.body.customData.now_time }}\",\n    \"now_date\": \"{{ $('Webhook').item.json.body.customData.now_date }}\",\n    \"contact_id\": \"{{ $('Webhook').item.json.body.customData.contact_id }}\",\n    \"to_number\": \"{{ $json.formattedPhone }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ],
+      "id": "1752d99d-c05e-44bc-8d86-887945cad1ab",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// New raw input phone number\nconst rawInput = $input.first().json.body.customData.to_number;\n\n// Step 1: Remove all non-digit characters\nconst digits = rawInput.replace(/\\D/g, '');\n\n// Step 2: Check the length\nlet formatted = '';\nif (digits.length === 10) {\n  // No country code → assume US and add +1\n  formatted = `+1${digits}`;\n} else {\n  // Country code exists → just prepend '+'\n  formatted = `+${digits}`;\n}\n\n// Output\nconsole.log('Formatted Phone:', formatted);\nreturn [{ formattedPhone: formatted }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        0
+      ],
+      "id": "1747c9e1-521c-428e-85ff-9fc437d4951f",
+      "name": "Code"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        []
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5046c99-662e-4f7a-a44c-637350516a07",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "384fba40593c03ccff966720aff7f4660b5f954ede01089c5da17027a948a27f"
+  },
+  "id": "KxOg1Sf9NEPwlAGm",
+  "tags": []
+}
